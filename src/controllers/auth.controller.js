@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Agency = require('../models/Agency');
 const jwt = require('jsonwebtoken');
 
 // Tạo JWT token
@@ -13,7 +14,7 @@ const generateToken = (id) => {
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role, agencyId } = req.body;
+    const { username, email, password, role, agencyId, address, phone } = req.body;
 
     // Kiểm tra user đã tồn tại
     const userExists = await User.findOne({ $or: [{ email }, { username }] });
@@ -24,13 +25,43 @@ exports.register = async (req, res) => {
       });
     }
 
+    let newAgencyId = agencyId;
+
+    // Nếu role là agency, tạo Agency record mới
+    if (role === 'agency') {
+      if (!address || !phone) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng nhập đầy đủ địa chỉ và số điện thoại cho đại lý',
+        });
+      }
+
+      // Tạo mã đại lý tự động
+      const agencyCount = await Agency.countDocuments();
+      const agencyCode = `DL${String(agencyCount + 1).padStart(3, '0')}`;
+
+      // Tạo Agency mới
+      const agency = await Agency.create({
+        code: agencyCode,
+        name: username, // Sử dụng username làm tên đại lý ban đầu
+        address,
+        phone,
+        email,
+        status: 'active',
+        debt: 0,
+        type: 1, // Mặc định loại 1
+      });
+
+      newAgencyId = agency._id;
+    }
+
     // Tạo user mới
     const user = await User.create({
       username,
       email,
       password,
       role: role || 'staff',
-      agencyId: role === 'agency' ? agencyId : undefined,
+      agencyId: newAgencyId,
     });
 
     // Tạo token
